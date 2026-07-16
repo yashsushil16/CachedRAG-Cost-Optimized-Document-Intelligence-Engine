@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+
+# Local cache data
+backend/data/
+*.json
+!backend/requirements.txt
+!frontend/package.json
+!frontend/src/**/*.json
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# IDEs & System
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
