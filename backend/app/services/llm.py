@@ -2,7 +2,7 @@ import json
 import re
 import logging
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from app.config import settings
 
 logger = logging.getLogger(__name__)

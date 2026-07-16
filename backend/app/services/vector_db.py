@@ -42,6 +42,15 @@ class VectorDBService:
         if not texts or not embeddings:
             return
 
+        # Always populate fallback database for maximum search resilience
+        for text, vector, meta in zip(texts, embeddings, metadata_list):
+            self.fallback_db.append({
+                "text": text,
+                "vector": vector,
+                "metadata": meta
+            })
+        logger.info(f"Saved {len(texts)} chunks to fallback vector store. Total chunks: {len(self.fallback_db)}")
+
         if not self.use_fallback and self.qdrant_client:
             try:
                 from qdrant_client.models import PointStruct
@@ -59,27 +68,17 @@ class VectorDBService:
                     points=points
                 )
                 logger.info(f"Upserted {len(texts)} chunks to Qdrant collection.")
-                return
             except Exception as e:
-                logger.error(f"Error upserting to Qdrant: {e}. Switching to fallback vector store.")
+                logger.error(f"Error upserting to Qdrant: {e}. Defaulting searches to fallback vector store.")
                 self.use_fallback = True
-
-        # Fallback implementation
-        for text, vector, meta in zip(texts, embeddings, metadata_list):
-            self.fallback_db.append({
-                "text": text,
-                "vector": vector,
-                "metadata": meta
-            })
-        logger.info(f"Saved {len(texts)} chunks to fallback vector store. Total chunks: {len(self.fallback_db)}")
 
     def search(self, query_vector: List[float], limit: int = 3) -> List[Dict[str, Any]]:
         """Searches the vector database for the top matches similar to query_vector."""
         if not self.use_fallback and self.qdrant_client:
             try:
-                results = self.qdrant_client.search(
+                results = self.qdrant_client.query_points(
                     collection_name=self.collection_name,
-                    query_vector=query_vector,
+                    query=query_vector,
                     limit=limit
                 )
                 return [
@@ -88,7 +87,7 @@ class VectorDBService:
                         "metadata": {k: v for k, v in hit.payload.items() if k != "text"},
                         "score": hit.score
                     }
-                    for hit in results
+                    for hit in results.points
                 ]
             except Exception as e:
                 logger.error(f"Error querying Qdrant: {e}. Using fallback vector store.")
