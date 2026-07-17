@@ -31,17 +31,24 @@ app.add_middleware(
 # Include API routes
 app.include_router(router)
 
-@app.get("/")
-async def root():
-    return {
-        "status": "online",
-        "message": "Dual-LLM RAG Backend Gateway is active.",
-        "config": {
-            "simulation_mode": settings.is_simulation_mode,
-            "cache_threshold": settings.SEMANTIC_CACHE_THRESHOLD,
-            "evaluation_rate": settings.EVALUATION_RATE
+import os
+from fastapi.staticfiles import StaticFiles
+
+static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static_frontend"))
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+else:
+    @app.get("/")
+    async def root():
+        return {
+            "status": "online",
+            "message": "Dual-LLM RAG Backend Gateway is active.",
+            "config": {
+                "simulation_mode": settings.is_simulation_mode,
+                "cache_threshold": settings.SEMANTIC_CACHE_THRESHOLD,
+                "evaluation_rate": settings.EVALUATION_RATE
+            }
         }
-    }
 
 @app.on_event("startup")
 async def startup_event():
