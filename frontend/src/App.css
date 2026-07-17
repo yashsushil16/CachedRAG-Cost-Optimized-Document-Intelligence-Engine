@@ -434,10 +434,28 @@ body {
   cursor: ns-resize;
   flex-shrink: 0;
   transition: background 0.1s;
+  position: relative;
+  z-index: 10;
 }
 
-.resize-handle:hover {
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
   background: var(--accent-blue);
+}
+
+body.resizing-active {
+  cursor: ns-resize !important;
+  user-select: none !important;
 }
 
 /* Bottom Panel — Analytics (terminal-style) */

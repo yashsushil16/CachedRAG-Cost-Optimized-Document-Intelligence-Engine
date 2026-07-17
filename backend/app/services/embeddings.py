@@ -8,16 +8,44 @@ logger = logging.getLogger(__name__)
 class EmbeddingsService:
     def __init__(self):
         self.model = None
-        self.dimension = 384  # Standard dimension for all-MiniLM-L6-v2
+        self.gemini_enabled = False
         self.initialized = False
+        self.dimension = 384  # Default, but updated dynamically
         
-        # Try loading sentence-transformers
+        # 1. Try initializing Gemini API first if configured
+        if settings.GEMINI_API_KEY:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=settings.GEMINI_API_KEY)
+                self.gemini_enabled = True
+                self.dimension = 768  # Gemini text-embedding-004 uses 768 dimensions
+                logger.info("Google Gemini Embeddings service configured (text-embedding-004).")
+            except Exception as e:
+                logger.warning(f"Could not configure Gemini API for embeddings: {e}. Trying local SentenceTransformers.")
+
+        # 2. Try loading local sentence-transformers if Gemini is disabled/unconfigured
+        if not self.gemini_enabled:
+            self._init_local_model()
+            
+        # 3. If neither works, set default dimension based on selected model string
+        if not self.gemini_enabled and not self.initialized:
+            self.dimension = 768 if "mpnet" in settings.EMBEDDING_MODEL else 384
+            logger.info(f"Using deterministic feature hashing fallback. Dimension: {self.dimension}")
+
+    def _init_local_model(self):
+        """Initializes local SentenceTransformer model if not already initialized."""
+        if self.initialized and self.model:
+            return
         try:
             from sentence_transformers import SentenceTransformer
             logger.info(f"Loading local SentenceTransformer model: {settings.EMBEDDING_MODEL}")
             self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+            if hasattr(self.model, "get_sentence_embedding_dimension"):
+                self.dimension = self.model.get_sentence_embedding_dimension()
+            else:
+                self.dimension = 768 if "mpnet" in settings.EMBEDDING_MODEL else 384
             self.initialized = True
-            logger.info("SentenceTransformer model loaded successfully.")
+            logger.info(f"SentenceTransformer model loaded successfully. Dimension: {self.dimension}")
         except Exception as e:
             logger.warning(
                 f"Could not load SentenceTransformer ({e}). "
@@ -27,10 +55,27 @@ class EmbeddingsService:
             self.initialized = False
 
     def get_embedding(self, text: str) -> List[float]:
-        """Generates a 384-dimensional vector embedding for the input text."""
+        """Generates a vector embedding for the input text."""
         if not text:
             return [0.0] * self.dimension
 
+        # Try Gemini API if enabled
+        if self.gemini_enabled:
+            try:
+                import google.generativeai as genai
+                result = genai.embed_content(
+                    model="models/text-embedding-004",
+                    content=text,
+                    task_type="retrieval_query"
+                )
+                return result["embedding"]
+            except Exception as e:
+                logger.error(f"Error generating embedding with Gemini API: {e}. Falling back to local model.")
+                # Temporarily disable Gemini so we don't spam requests and trigger fallbacks immediately next time
+                self.gemini_enabled = False
+                self._init_local_model()
+
+        # Try local model
         if self.initialized and self.model:
             try:
                 embedding = self.model.encode(text)
@@ -45,6 +90,23 @@ class EmbeddingsService:
         if not texts:
             return []
             
+        # Try Gemini API if enabled
+        if self.gemini_enabled:
+            try:
+                import google.generativeai as genai
+                result = genai.embed_content(
+                    model="models/text-embedding-004",
+                    content=texts,
+                    task_type="retrieval_document"
+                )
+                # Google API returns a list of dictionaries/floats for batch requests
+                return result["embedding"]
+            except Exception as e:
+                logger.error(f"Error generating batch embeddings with Gemini API: {e}. Falling back to local model.")
+                self.gemini_enabled = False
+                self._init_local_model()
+
+        # Try local model
         if self.initialized and self.model:
             try:
                 embeddings = self.model.encode(texts)

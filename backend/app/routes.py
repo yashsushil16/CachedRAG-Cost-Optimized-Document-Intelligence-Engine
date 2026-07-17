@@ -116,8 +116,10 @@ async def process_chat(request: QueryRequest, background_tasks: BackgroundTasks)
     metrics_store.total_queries += 1
     start_time = time.time()
     
-    # 1. Generate query embedding
-    query_vector = embeddings_service.get_embedding(query)
+    # 1. Generate query embedding from normalized/preprocessed query
+    cleaned_query = semantic_cache.clean_query_for_cache(query)
+    # Fall back to original query if cleaning results in empty string
+    query_vector = embeddings_service.get_embedding(cleaned_query or query)
     
     # 2. Check Semantic Cache (Redis VSS simulation)
     cache_entry, similarity = semantic_cache.query(query, query_vector)

@@ -17,6 +17,26 @@ class SemanticCacheService:
         self.misses = 0
         self.load_cache()
 
+    def clean_query_for_cache(self, text: str) -> str:
+        """Normalizes query text to maximize semantic cache hit rate."""
+        import re
+        if not text:
+            return ""
+        text = text.lower().strip()
+        # Remove punctuation
+        text = re.sub(r'[^\w\s]', '', text)
+        # Remove common conversational fillers and auxiliary words
+        fillers = [
+            r"\bplease\b", r"\bcould you\b", r"\bcan you\b", r"\btell me\b",
+            r"\bshow me\b", r"\bhow do i\b", r"\bhow to\b", r"\bis there a way to\b",
+            r"\bsteps to\b", r"\bwhat is\b", r"\bwhat are\b", r"\bgive me\b",
+            r"\bfind\b", r"\bsearch for\b", r"\blist of\b", r"\bcan i\b", r"\bdo i\b"
+        ]
+        for filler in fillers:
+            text = re.sub(filler, '', text)
+        # Standardize whitespace
+        return " ".join(text.split())
+
     def load_cache(self):
         """Loads cached queries and answers from disk."""
         with self.lock:
@@ -91,9 +111,10 @@ class SemanticCacheService:
             faithfulness: float = 1.0, relevance: float = 1.0, latency_ms: float = 0.0):
         """Adds a new query, its vector, and generated answer to the cache."""
         with self.lock:
-            # Check if query already exists to prevent duplicate exact strings
+            # Check if query already exists (using cleaned text comparison) to prevent duplicate exact strings
+            cleaned_target = self.clean_query_for_cache(query_text)
             for entry in self.entries:
-                if entry["query"].strip().lower() == query_text.strip().lower():
+                if self.clean_query_for_cache(entry["query"]) == cleaned_target:
                     # Update existing entry
                     entry["answer"] = answer
                     entry["vector"] = query_vector

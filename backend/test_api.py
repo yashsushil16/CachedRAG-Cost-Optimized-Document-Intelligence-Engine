@@ -20,7 +20,7 @@ def run_tests():
     print("[1/5] Testing Embeddings Generation Service...")
     sample_text = "How do I reset my account password?"
     vec = embeddings_service.get_embedding(sample_text)
-    assert len(vec) == 384, f"Expected 384-dim vector, got {len(vec)}"
+    assert len(vec) == embeddings_service.dimension, f"Expected {embeddings_service.dimension}-dim vector, got {len(vec)}"
     print(f"  SUCCESS: Generated {len(vec)}-dimensional vector embedding.")
 
     # 2. Test Vector DB Ingestion & Retrieval
@@ -61,7 +61,8 @@ def run_tests():
     semantic_cache.reset()
     
     query1 = "How can I update my login credentials?"
-    query1_vec = embeddings_service.get_embedding(query1)
+    query1_cleaned = semantic_cache.clean_query_for_cache(query1)
+    query1_vec = embeddings_service.get_embedding(query1_cleaned or query1)
     ans1 = "You can update your credentials by clicking the reset profile link in user settings."
     
     # Check cache (should miss)
@@ -80,15 +81,14 @@ def run_tests():
 
     # Test semantic match (similar wording, e.g. 'steps to change login info')
     query2 = "steps to change my login info"
-    query2_vec = embeddings_service.get_embedding(query2)
+    query2_cleaned = semantic_cache.clean_query_for_cache(query2)
+    query2_vec = embeddings_service.get_embedding(query2_cleaned or query2)
     match, score = semantic_cache.query(query2, query2_vec)
     
-    # Our hashing trick produces similar vectors for similar word sets. Let's inspect
-    print(f"  Semantic Lookup: Wording '{query2}' vs cache returns similarity {score:.4f}")
-    if score >= 0.85:
-        print("  SUCCESS: Semantic Cache HIT achieved for similar wording.")
-    else:
-        print("  Info: Semantic similarity is below hit threshold, correct for unaligned vectors.")
+    print(f"  Semantic Lookup: Wording '{query2}' (Cleaned: '{query2_cleaned}') vs cache returns similarity {score:.4f}")
+    from app.config import settings
+    assert match is not None, f"Expected semantic cache hit for similarity {score:.4f} against threshold {settings.SEMANTIC_CACHE_THRESHOLD}"
+    print(f"  SUCCESS: Semantic Cache HIT achieved for similar wording with similarity {score:.4f}.")
 
     print("\n" + "=" * 60)
     print("ALL VERIFICATION TESTS COMPLETED SUCCESSFULLY!")

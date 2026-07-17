@@ -8,7 +8,11 @@ logger = logging.getLogger(__name__)
 class VectorDBService:
     def __init__(self):
         self.collection_name = "knowledge_base"
-        self.vector_size = 384
+        
+        # Load size dynamically from embeddings service
+        from app.services.embeddings import embeddings_service
+        self.vector_size = embeddings_service.dimension
+        
         self.qdrant_client = None
         self.use_fallback = False
         
@@ -154,6 +158,8 @@ class VectorDBService:
             try:
                 self.qdrant_client.delete_collection(self.collection_name)
                 from qdrant_client.models import Distance, VectorParams
+                from app.services.embeddings import embeddings_service
+                self.vector_size = embeddings_service.dimension
                 self.qdrant_client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE),
